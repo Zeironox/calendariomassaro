@@ -3,92 +3,176 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Calendario Prenotazioni</title>
+  <title>Prenota un Appuntamento</title>
   <style>
-    body { font-family: sans-serif; padding: 2rem; background: #f9f9f9; }
-    h1 { text-align: center; margin-bottom: 1rem; }
-    .slot {
-      padding: 1rem; 
-      border: 1px solid #ccc; 
-      margin: 5px auto; 
-      width: 300px;
-      cursor: pointer; 
-      border-radius: 5px;
-      background-color: white;
-      transition: background-color 0.3s;
-    }
-    .slot:hover:not(.booked) { background-color: #e0f7fa; }
-    .booked {
-      background-color: #ccc;
-      cursor: default;
-      pointer-events: none;
-      color: #666;
-    }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 2rem; }
+    form { max-width: 400px; margin: auto; background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    input, select, button { width: 100%; padding: 10px; margin: 0.6rem 0; font-size: 1rem; }
+    button { background: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    #success-message, #error-message { text-align: center; margin-top: 1rem; font-weight: bold; }
+    #success-message { color: green; }
+    #error-message { color: red; }
   </style>
 </head>
 <body>
 
-<h1>Seleziona una Fascia Oraria</h1>
-<div id="slots"></div>
+  <h1 style="text-align:center;">Prenota un Appuntamento</h1>
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database-compat.js"></script>
+  <form id="booking-form" novalidate>
+    <input type="text" id="nome" placeholder="Nome e Cognome" required minlength="2" />
+    <input type="email" id="email" placeholder="Email" required />
+    <input type="tel" id="telefono" placeholder="Numero di Telefono" pattern="^[0-9+\-\s]{6,15}$" required />
+    
+    <select id="data" required>
+      <option value="">Seleziona Data</option>
+    </select>
+    
+    <select id="orario" required disabled>
+      <option value="">Seleziona Orario</option>
+    </select>
+    
+    <button type="submit" disabled>Prenota</button>
+  </form>
 
-<script>
-  // Configurazione Firebase del tuo progetto
-  const firebaseConfig = {
-    apiKey: "AIzaSyCTw4IObj9t5ehQ7QfhFZHpQRBtHNkVLxc",
-    authDomain: "calendario-gomme.firebaseapp.com",
-    databaseURL: "https://calendario-gomme-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "calendario-gomme",
-    storageBucket: "calendario-gomme.appspot.com",
-    messagingSenderId: "505179844190",
-    appId: "1:505179844190:web:897b2b289116dc91ed0ecf",
-    measurementId: "G-HFX7VNJE35"
-  };
+  <p id="success-message" role="alert" aria-live="polite"></p>
+  <p id="error-message" role="alert" aria-live="assertive"></p>
 
-  // Inizializza Firebase
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database-compat.js"></script>
 
-  const fasceOrarie = [
-    "09:00 - 10:00",
-    "10:00 - 11:00",
-    "11:00 - 12:00",
-    "14:00 - 15:00",
-    "15:00 - 16:00",
-    "16:00 - 17:00"
-  ];
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCTw4IObj9t5ehQ7QfhFZHpQRBtHNkVLxc",
+      authDomain: "calendario-gomme.firebaseapp.com",
+      databaseURL: "https://calendario-gomme-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "calendario-gomme",
+      storageBucket: "calendario-gomme.appspot.com",
+      messagingSenderId: "505179844190",
+      appId: "1:505179844190:web:897b2b289116dc91ed0ecf"
+    };
 
-  const slotsDiv = document.getElementById('slots');
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-  function renderSlots(prenotazioni) {
-    slotsDiv.innerHTML = '';
-    fasceOrarie.forEach(orario => {
-      const slot = document.createElement('div');
-      slot.className = 'slot';
-      if (prenotazioni[orario]) {
-        slot.classList.add('booked');
-        slot.textContent = `${orario} – Prenotato da ${prenotazioni[orario]}`;
-      } else {
-        slot.textContent = orario;
-        slot.onclick = () => {
-          const nome = prompt("Inserisci il tuo nome per prenotare questa fascia:");
-          if (!nome) return alert("Prenotazione annullata");
-          db.ref("prenotazioni/" + orario).set(nome)
-            .catch(err => alert("Errore durante la prenotazione: " + err.message));
-        };
+    const form = document.getElementById('booking-form');
+    const nomeInput = document.getElementById('nome');
+    const emailInput = document.getElementById('email');
+    const telefonoInput = document.getElementById('telefono');
+    const dataSelect = document.getElementById('data');
+    const orarioSelect = document.getElementById('orario');
+    const submitBtn = form.querySelector('button');
+    const successMessage = document.getElementById('success-message');
+    const errorMessage = document.getElementById('error-message');
+
+    // Carica le date fisse disponibili (solo admin modifica il DB)
+    async function loadDates() {
+      const snapshot = await db.ref('calendario').once('value');
+      const dates = snapshot.val();
+      if (!dates) return;
+
+      dataSelect.innerHTML = '<option value="">Seleziona Data</option>';
+      for (const date in dates) {
+        const option = document.createElement('option');
+        option.value = date;
+        option.textContent = date;
+        dataSelect.appendChild(option);
       }
-      slotsDiv.appendChild(slot);
+      dataSelect.disabled = false;
+    }
+
+    // Carica orari disponibili per la data selezionata
+    dataSelect.addEventListener('change', async () => {
+      orarioSelect.innerHTML = '<option value="">Seleziona Orario</option>';
+      orarioSelect.disabled = true;
+
+      if (!dataSelect.value) {
+        checkFormValidity();
+        return;
+      }
+
+      const snapshot = await db.ref(`calendario/${dataSelect.value}`).once('value');
+      const slots = snapshot.val() || {};
+      for (const ora in slots) {
+        if (slots[ora].disponibile) {
+          const option = document.createElement('option');
+          option.value = ora;
+          option.textContent = ora;
+          orarioSelect.appendChild(option);
+        }
+      }
+      orarioSelect.disabled = false;
+      checkFormValidity();
     });
-  }
 
-  db.ref("prenotazioni").on("value", snapshot => {
-    const prenotazioni = snapshot.val() || {};
-    renderSlots(prenotazioni);
-  });
-</script>
+    // Controlla se abilitare il bottone submit
+    function checkFormValidity() {
+      submitBtn.disabled = !(
+        nomeInput.checkValidity() &&
+        emailInput.checkValidity() &&
+        telefonoInput.checkValidity() &&
+        dataSelect.value &&
+        orarioSelect.value
+      );
+    }
 
+    [nomeInput, emailInput, telefonoInput, dataSelect, orarioSelect].forEach(el =>
+      el.addEventListener('input', checkFormValidity)
+    );
+
+    // Funzione per generare token unico
+    function generateToken() {
+      return Math.random().toString(36).substr(2, 15);
+    }
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      successMessage.textContent = '';
+      errorMessage.textContent = '';
+
+      const prenotazione = {
+        nome: nomeInput.value.trim(),
+        email: emailInput.value.trim(),
+        telefono: telefonoInput.value.trim(),
+        data: dataSelect.value,
+        ora: orarioSelect.value,
+        annullaToken: generateToken()
+      };
+
+      try {
+        // Scrivi prenotazione in DB con ID unico
+        const id = Date.now().toString();
+        await db.ref(`prenotazioni/${id}`).set(prenotazione);
+
+        // Marca slot come non disponibile
+        await db.ref(`calendario/${prenotazione.data}/${prenotazione.ora}`).update({ disponibile: false });
+
+        // Chiama Cloud Function per invio email
+        const response = await fetch('https://us-central1-calendario-gomme.cloudfunctions.net/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(prenotazione)
+        });
+
+        if (!response.ok) {
+          throw new Error('Errore invio email');
+        }
+
+        form.reset();
+        orarioSelect.disabled = true;
+        submitBtn.disabled = true;
+        successMessage.textContent = 'Prenotazione confermata! Controlla la tua email.';
+      } catch (error) {
+        errorMessage.textContent = 'Errore durante la prenotazione. Riprova più tardi.';
+        console.error(error);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    // Avvia caricamento date appena caricato il sito
+    loadDates();
+  </script>
 </body>
 </html>
