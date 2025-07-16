@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Prenotazioni</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 2rem; background: #fafafa; }
+    #login-form, #logout-btn, #prenotazioni-section { max-width: 600px; margin: auto; }
+    input, button { padding: 10px; font-size: 1rem; margin: 0.5rem 0; width: 100%; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #007bff; color: white; }
+    #logout-btn { display: none; margin-bottom: 1rem; }
+    #error-message, #info-message { text-align: center; margin-top: 1rem; font-weight: bold; }
+    #error-message { color: red; }
+    #info-message { color: green; }
+  </style>
+</head>
+<body>
+
+  <h1 style="text-align:center;">Area Admin - Prenotazioni</h1>
+
+  <form id="login-form" aria-label="Login admin">
+    <input type="email" id="admin-email" placeholder="Email Admin" required />
+    <input type="password" id="admin-password" placeholder="Password" required />
+    <button type="submit">Accedi</button>
+  </form>
+
+  <button id="logout-btn">Esci</button>
+
+  <section id="prenotazioni-section" style="display:none;">
+    <h2>Prenotazioni attive</h2>
+    <table aria-live="polite" aria-label="Tabella prenotazioni">
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Email</th>
+          <th>Telefono</th>
+          <th>Data</th>
+          <th>Ora</th>
+          <th>Token annullamento</th>
+        </tr>
+      </thead>
+      <tbody id="prenotazioni-body"></tbody>
+    </table>
+  </section>
+
+  <p id="error-message" role="alert" aria-live="assertive"></p>
+  <p id="info-message" role="alert" aria-live="polite"></p>
+
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCTw4IObj9t5ehQ7QfhFZHpQRBtHNkVLxc",
+      authDomain: "calendario-gomme.firebaseapp.com",
+      databaseURL: "https://calendario-gomme-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "calendario-gomme",
+      storageBucket: "calendario-gomme.appspot.com",
+      messagingSenderId: "505179844190",
+      appId: "1:505179844190:web:897b2b289116dc91ed0ecf"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+
+    const loginForm = document.getElementById('login-form');
+    const logoutBtn = document.getElementById('logout-btn');
+    const prenotazioniSection = document.getElementById('prenotazioni-section');
+    const prenotazioniBody = document.getElementById('prenotazioni-body');
+    const errorMessage = document.getElementById('error-message');
+    const infoMessage = document.getElementById('info-message');
+
+    loginForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      errorMessage.textContent = '';
+      infoMessage.textContent = '';
+
+      const email = document.getElementById('admin-email').value;
+      const password = document.getElementById('admin-password').value;
+
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+      } catch (error) {
+        errorMessage.textContent = "Login fallito: " + error.message;
+      }
+    });
+
+    logoutBtn.addEventListener('click', () => {
+      auth.signOut();
+    });
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        loginForm.style.display = 'none';
+        logoutBtn.style.display = 'block';
+        prenotazioniSection.style.display = 'block';
+        loadPrenotazioni();
+      } else {
+        loginForm.style.display = 'block';
+        logoutBtn.style.display = 'none';
+        prenotazioniSection.style.display = 'none';
+        prenotazioniBody.innerHTML = '';
+      }
+    });
+
+    function loadPrenotazioni() {
+      db.ref('prenotazioni').on('value', snapshot => {
+        prenotazioniBody.innerHTML = '';
+        const prenotazioni = snapshot.val();
+        if (!prenotazioni) {
+          infoMessage.textContent = 'Nessuna prenotazione al momento.';
+          return;
+        }
+        infoMessage.textContent = '';
+        for (const id in prenotazioni) {
+          const p = prenotazioni[id];
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${escapeHTML(p.nome)}</td>
+            <td>${escapeHTML(p.email)}</td>
+            <td>${escapeHTML(p.telefono)}</td>
+            <td>${escapeHTML(p.data)}</td>
+            <td>${escapeHTML(p.ora)}</td>
+            <td>${escapeHTML(p.annullaToken)}</td>
+          `;
+          prenotazioniBody.appendChild(tr);
+        }
+      });
+    }
+
+    // Funzione semplice per evitare injection HTML
+    function escapeHTML(text) {
+      return text.replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[m]);
+    }
+  </script>
+</body>
+</html>

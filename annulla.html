@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Annulla Prenotazione</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; background: #f9f9f9; text-align: center; }
+    .box { background: white; padding: 2rem; max-width: 400px; margin: auto; border-radius: 6px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    .success { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Annullamento Prenotazione</h1>
+    <p id="result">Attendere...</p>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-database-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCTw4IObj9t5ehQ7QfhFZHpQRBtHNkVLxc",
+      authDomain: "calendario-gomme.firebaseapp.com",
+      databaseURL: "https://calendario-gomme-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "calendario-gomme",
+      storageBucket: "calendario-gomme.appspot.com",
+      messagingSenderId: "505179844190",
+      appId: "1:505179844190:web:897b2b289116dc91ed0ecf"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const resultEl = document.getElementById('result');
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    if (!token) {
+      resultEl.textContent = 'Errore: token mancante.';
+      resultEl.className = 'error';
+    } else {
+      db.ref('prenotazioni').once('value').then(snapshot => {
+        const prenotazioni = snapshot.val() || {};
+        let found = false;
+        for (const id in prenotazioni) {
+          const p = prenotazioni[id];
+          if (p.annullaToken === token) {
+            found = true;
+            // Rendi di nuovo disponibile la fascia oraria
+            const data = p.data;
+            const ora = p.ora;
+
+            db.ref(`calendario/${data}/${ora}`).update({ disponibile: true });
+            db.ref(`prenotazioni/${id}`).remove();
+
+            resultEl.textContent = `Prenotazione per il ${data} alle ${ora} annullata con successo.`;
+            resultEl.className = 'success';
+            break;
+          }
+        }
+        if (!found) {
+          resultEl.textContent = 'Token non valido o prenotazione già annullata.';
+          resultEl.className = 'error';
+        }
+      }).catch(error => {
+        resultEl.textContent = 'Errore durante l'accesso al database.';
+        resultEl.className = 'error';
+      });
+    }
+  </script>
+</body>
+</html>

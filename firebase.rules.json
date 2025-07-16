@@ -1,0 +1,16 @@
+{
+  "rules": {
+    "calendario": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "prenotazioni": {
+      ".read": "auth != null",
+      ".write": true
+    },
+    "admins": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}
